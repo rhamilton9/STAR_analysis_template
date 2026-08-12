@@ -33,12 +33,16 @@ production_key="P12id"
 outfile_name="pp2012.list"
 
 
-# Run
+# Stat directories, remove previous file if it exists
+if [ ! -d "lists" ]; then 
+    mkdir lists
+fi
 fullfilename="lists/${outfile_name}"
 if [ -f $fullfilename ]; then
     rm $fullfilename
 fi
 
+# Run
 echo "Beginning search for files in dataset ${trigger_setup_name}"
 get_file_list.pl -keys 'path,filename' -cond "storage!=hpss,filetype=${file_type},trgsetupname=${trigger_setup_name},production=${production_key}" -limit $total_files -delim '/' > $fullfilename
 
