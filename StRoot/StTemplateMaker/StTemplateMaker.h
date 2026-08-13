@@ -91,7 +91,6 @@ private:
   // *-- Run level
   
   int bRun_id;                     	// Tree branch hook : run ID
-  int bRun_goodrun;                	// Tree branch hook : good run flag
   
   // *-- Event level
   
@@ -104,6 +103,7 @@ private:
   float 	bEvent_Vyerr;		// Tree branch hook : Event primary vertex y error
   float 	bEvent_Vrerr;		// Tree branch hook : Event primary vertex radial error
   float 	bEvent_Vzerr;		// Tree branch hook : Event primary vertex z error
+  int           bEvent_vertexrank;      // Tree branch hook : Primary vertex rank
   int 		bEvent_refmult;		// Tree branch hook : Event refmult     
   int 		bEvent_tofmult;         // Tree branch hook : Event tofmult
   
@@ -122,7 +122,7 @@ private:
   Bool_t fCollectPVHistograms;
   Bool_t fWriteDataTree;
   
-  // Output data files
+  // Output data files/formatting
   TString fOutputFileName;
   TFile* fOutputFile;
   
@@ -158,7 +158,8 @@ public:
   void SetCollectTrackHistograms() 		{ fCollectTrackHistograms = true; }
   void SetCollectPIDHistograms() 		{ fCollectPIDHistograms = true; }
   void SetCollectPVHistograms() 		{ fCollectPVHistograms = true; }
-  void SetOutputFileName(TString name) 		{ fOutputFileName = name; }
+  void SetOutputFileName(TString name)          { fOutputFileName = name; }
+
   // Getters
   TFile* GetOutputFile() 			{ return fOutputFile; }
   

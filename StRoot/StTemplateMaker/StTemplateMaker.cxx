@@ -90,19 +90,8 @@ StTemplateMaker::StTemplateMaker(const char *name) : StMaker(name), // Inheritan
   memset(memory_zero_begin, 0, memory_zero_end - memory_zero_begin + 1);
   
 
-
   // Add any initializers that should be run on object creation (i.e. as a constructor)
-  
-  // restored after booking the plots here
-  TFile* curFile = gFile;
-  TDirectory* curDirectory = gDirectory;
-  
-  fOutputFile = new TFile(fOutputFileName, "RECREATE");
-  
-  // Pass global file pointers back to what they were before
-  gFile = curFile;
-  gDirectory = curDirectory;
-  
+  fOutputFile = NULL;
 }// End StTemplateMaker::Constructor
 
 //----------------------------------------------------------------------------------------------------- Deconstructor
@@ -125,7 +114,13 @@ StTemplateMaker::~StTemplateMaker() {
 // This method is called by StRoot when BFChain is created.
 // This is where output files/TObjects (hists, trees) should be initialized
 Int_t StTemplateMaker::Init() {
-
+  
+  // restore to gFile after booking the plots here
+  TFile* curFile = gFile;
+  TDirectory* curDirectory = gDirectory;
+  
+  fOutputFile = new TFile(fOutputFileName, "RECREATE"); 
+  
   // Set up quality control histograms
   fOutputFile->cd();
   if (fCollectPVHistograms)     BookVertexHistograms();
@@ -137,14 +132,14 @@ Int_t StTemplateMaker::Init() {
   // Can be easily modified to include other desired information
   if (fWriteDataTree) { 
     // TTrees must be created after the TFile to store them in the correct directory.
-    fSampleTree = new TTree("Dzero_tree","Dzero_tree");
+    fSampleTree = new TTree("sample_tree","sample_tree");
     // Overall run/event info (may be repetitions if events have multiple D0 candidates)
     //                 TREE BRANCH NAME           LOCAL ADDRESS           TREE BRANCH TYPE
     fSampleTree->Branch("bRun_id",                &bRun_id,               "bRun_id/I");	                // Run : ID
-    fSampleTree->Branch("bRun_goodrun",           &bRun_goodrun,          "bRun_goodrun/I");            // Run : Run status (bad or good)
     fSampleTree->Branch("bEvent_id",              &bEvent_id,             "bEvent_id/I");               // Event : ID
     fSampleTree->Branch("bEvent_Vz",              &bEvent_Vz,             "bEvent_Vz/F");               // Event : vertex z position
-    fSampleTree->Branch("bEvent_refmult",         &bEvent_refmult,        "bEvent_refmult/I");          // Event : Reference Multiplicity
+    fSampleTree->Branch("bEvent_vertexrank",      &bEvent_vertexrank,     "bEvent_vertexrank/I");       // Event : vertex ranking (more positive is a better PV)
+    fSampleTree->Branch("bEvent_refmult",         &bEvent_refmult,        "bEvent_refmult/I");          // Event : Reference Multiplicity in eta [-0.5,0.5]
     fSampleTree->Branch("bEvent_tofmult",         &bEvent_tofmult,        "bEvent_tofmult/I");          // Event : ToF Multiplicity
     std::cout << "StTemplateMaker:INFO  - Data TTree initialized." << std::endl;
   }
@@ -152,17 +147,16 @@ Int_t StTemplateMaker::Init() {
   // Initialize TObjects that should always be initialized
   fSampleHist = new TH1D("sample_histogram","Sample Hist;x;Counts;",50,-3.0,3.0);
   
+  std::cout << "StTemplateMaker:INFO  - Data Histograms initialized." << std::endl;
 
-  /* 
-  // StRefMultCorrUtil / centrality utility
-  fRefmultCorrUtil = CentralityMaker::instance()->getgRefMultCorr_P16id();
-  fRefmultCorrUtil->setVzForWeight(6, -6.0, 6.0);
-  fRefmultCorrUtil->readScaleForWeight("/gpfs01/star/pwg/pfederic/qVectors/StRoot/StRefMultCorr/macros/weight_grefmult_VpdnoVtx_Vpd5_Run16.txt"); //for new StRefMultCorr, Run16, SL16j
-  */
-
+  
+  
   std::cout << "StTemplateMaker:INFO  - Initialization successful. " << endl;
   std::cout << "==============================End of StTemplateMaker::Init()=============================" << std::endl;
 
+  // Pass global file pointers back to what they were before
+  gFile = curFile;
+  gDirectory = curDirectory;
   return kStOK;
 }// End of StTemplateMaker::Init
 
@@ -286,19 +280,56 @@ void StTemplateMaker::BookPIDHistograms() {
 // The main analysis loop
 // This runs for every event
 Int_t StTemplateMaker::Make() {  
-  
-  // Add analysis functionality here
+  // Set up pointers to current event in the DSTs
+  if (fIsPicoAnalysis) {// PicoDST
+    fPicoDst = StPicoDst::instance();
+    if (!fPicoDst) return kStOK;
+  } else {// MuDST 
+    fMuDst = StMuDst::instance();
+    if (!fMuDst) return kStOK;
+  }// End of pointer set
+
+
+  //================================================================================= Add analysis functionality below
   if (fSampleHist->GetEntries() == 0) std::cout << "Hello world!" << std::endl;
   fSampleHist->FillRandom("gaus", 1);
   
   if (fWriteDataTree) {
     // Get relevant parameters from MuDST/PicoDST
-    
+    if (fIsPicoAnalysis) {// PicoDST
+      StPicoEvent* pico_event = fPicoDst->event();
+
+      bRun_id = pico_event->runId();
+      bEvent_id = pico_event->eventId();
+      bEvent_Vz = pico_event->vzVpd();
+      bEvent_vertexrank = pico_event->ranking(); // PV rank, for pileup identification
+      bEvent_refmult = pico_event->refMult();
+      bEvent_tofmult = pico_event->btofTrayMultiplicity();
+    }// End of PicoDST
+
+    else { // MuDST
+      StMuEvent* mu_event = fMuDst->event();
+      
+      // Loop over all candidate primary vertices
+      for(uint32_t i_PV = 0; i_PV < fMuDst->numberOfPrimaryVertices(); i_PV++) {
+        StMuPrimaryVertex* vertex = fMuDst->primaryVertex(i_PV);
+        if(!vertex) continue;
+        
+        bRun_id = mu_event->runId();
+        bEvent_id = mu_event->eventId();
+        bEvent_Vz = mu_event->vpdVz();
+        bEvent_vertexrank = vertex->ranking(); // PV rank, for pileup identification
+        bEvent_refmult = mu_event->refMult(i_PV);
+        bEvent_tofmult = mu_event->btofTrayMultiplicity();
+      }// End of PV loop
+    }// End of MuDST
     
     
     fSampleTree->Fill();
   }// End of tree write
 
+  //================================================================================= Add analysis functionality above
+  
   return kStOK;
 }// End of StTemplateMaker::Make()
 
