@@ -1,28 +1,16 @@
 // ------------------------------------------------------------------------
 //
-// Template Star StMaker class 
-// Made by R. Hamilton Jul. 27, 2026 by studing other codes including:
-//   * StKFParticleMaker by Yuri Fisyak, Maksym Zyzak, (others?)
-//   * https://github.com/joelmazer/star-jetframework/blob/master/StJet.cxx
+// Simple STAR PID Interfacer class 
+// Made by R. Hamilton [date]
 // No GenAI tools were used in the making of this file!
 //
 // Changelog: 
-//   - Aug. 04, 2026 : Template maker class completed
-// 
-// ------------------------------------------------------------------------
-// 
-// To create a new class using this template it is easiest to use
-// terminal commands to replace all instances of StTemplateMaker with 
-// the desired new class name. For convenience this is implemented in the 
-// local bash script in the base directory for the template analysis,
-//
-// 	../../changeTemplateName.sh
 // 
 // ------------------------------------------------------------------------
 
 
 // Header/base class
-#include "StTemplateMaker.h"
+#include "StPIDInterface.h"
 
 // Root classes
 #include "TDirectory.h"
@@ -33,11 +21,7 @@
 #include "TTree.h"
 #include "TSystem.h"
 
-// TMVA classes (ROOT machine learning package)
-#include "TMVA/GeneticAlgorithm.h"
-#include "TMVA/GeneticFitter.h"
-#include "TMVA/IFitterTarget.h"
-#include "TMVA/Factory.h"
+// STAR PID classes
 
 // PicoDST classes 
 #include "StPicoDstMaker/StPicoDstMaker.h"
@@ -56,7 +40,7 @@
 
 // One can include local classes from other packages, so long as they are in the StRoot directory
 // Any code or external packages not implemented in StRoot (https://github.com/star-bnl/star-sw/tree/main/StRoot)
-// should be stored in the local StRoot directory, like this class which lives in [analysis_dir]/StRoot/StTemplateMaker
+// should be stored in the local StRoot directory, like this class which lives in [analysis_dir]/StRoot/StPIDInterface
 
 
 
@@ -66,12 +50,14 @@
 // This labels all contents of this file as body for the class.
 //
 // Must correspond to ClassDef in header class
-ClassImp(StTemplateMaker);
+ClassImp(StPIDInterface);
 
+// Global pointer to current StPIDInterface
+StPIDInterface* gStPIDInterface;
 
 //----------------------------------------------------------------------------------------------------- Constructor
-StTemplateMaker::StTemplateMaker(const char *name) : StMaker(name), // Inheritance
-// *--- Default initializations for class variables, defined in the header file StTemplateMaker.h
+StPIDInterface::StPIDInterface(const char *name) : StMaker(name), // Inheritance
+// *--- Default initializations for class variables, defined in the header file StPIDInterface.h
 //      These variables can be changed only by interacting with class setters, defined in the header file.
 //      Defining these variables here declares them available as external objects to other methods in this file
 //      that live outside the class body
@@ -82,6 +68,7 @@ StTemplateMaker::StTemplateMaker(const char *name) : StMaker(name), // Inheritan
 	fWriteDataTree(true),                         // Switch for collecting data to TTree
 	fOutputFileName("output.root"),               // Name of output file where histograms are written
 	fOutputFile(nullptr) {                        // TFile pointer to output file
+  gStPIDInterface = this;
   
   // Write zeros to the location of this object in memory,
   // so that it is not initialized with random data that could cause 
@@ -92,7 +79,7 @@ StTemplateMaker::StTemplateMaker(const char *name) : StMaker(name), // Inheritan
 
   // Add any initializers that should be run on object creation (i.e. as a constructor)
   fOutputFile = NULL;
-}// End StTemplateMaker::Constructor
+}// End StPIDInterface::Constructor
 
 //----------------------------------------------------------------------------------------------------- Deconstructor
 
@@ -100,12 +87,12 @@ StTemplateMaker::StTemplateMaker(const char *name) : StMaker(name), // Inheritan
 // because the memory is not erased outside of the relevant scope
 //
 // SafeDeleta() checks that the given pointer is not NULL before deleting it.
-StTemplateMaker::~StTemplateMaker() {
+StPIDInterface::~StPIDInterface() {
   SafeDelete(fOutputFile);
 
   SafeDelete(fSampleHist);
   SafeDelete(fSampleTree);
-}// End of StTemplateMaker::~StTemplateMaker
+}// End of StPIDInterface::~StPIDInterface
 
 
 
@@ -113,7 +100,7 @@ StTemplateMaker::~StTemplateMaker() {
 
 // This method is called by StRoot when BFChain is created.
 // This is where output files/TObjects (hists, trees) should be initialized
-Int_t StTemplateMaker::Init() {
+Int_t StPIDInterface::Init() {
   
   // restore to gFile after booking the plots here
   TFile* curFile = gFile;
@@ -141,38 +128,38 @@ Int_t StTemplateMaker::Init() {
     fSampleTree->Branch("bEvent_vertexrank",      &bEvent_vertexrank,     "bEvent_vertexrank/I");       // Event : vertex ranking (more positive is a better PV)
     fSampleTree->Branch("bEvent_refmult",         &bEvent_refmult,        "bEvent_refmult/I");          // Event : Reference Multiplicity in eta [-0.5,0.5]
     fSampleTree->Branch("bEvent_tofmult",         &bEvent_tofmult,        "bEvent_tofmult/I");          // Event : ToF Multiplicity
-    std::cout << "StTemplateMaker:INFO  - Data TTree initialized." << std::endl;
+    std::cout << "StPIDInterface:INFO  - Data TTree initialized." << std::endl;
   }
   
   // Initialize TObjects that should always be initialized
   fSampleHist = new TH1D("sample_histogram","Sample Hist;x;Counts;",50,-3.0,3.0);
   
-  std::cout << "StTemplateMaker:INFO  - Data Histograms initialized." << std::endl;
+  std::cout << "StPIDInterface:INFO  - Data Histograms initialized." << std::endl;
 
   
   
-  std::cout << "StTemplateMaker:INFO  - Initialization successful. " << endl;
-  std::cout << "==============================End of StTemplateMaker::Init()=============================" << std::endl;
+  std::cout << "StPIDInterface:INFO  - Initialization successful. " << endl;
+  std::cout << "==============================End of StPIDInterface::Init()=============================" << std::endl;
 
   // Pass global file pointers back to what they were before
   gFile = curFile;
   gDirectory = curDirectory;
   return kStOK;
-}// End of StTemplateMaker::Init
+}// End of StPIDInterface::Init
 
 
 
 // Initializer for an individual run
-Int_t StTemplateMaker::InitRun(Int_t runumber) {
+Int_t StPIDInterface::InitRun(Int_t runumber) {
   // Just pass onto StMaker, 
   // could in principle add other functionality
   return StMaker::InitRun(runumber);
-}// End StTemplateMaker::InitRun
+}// End StPIDInterface::InitRun
 
 
 
 // Print information about memory usage
-void StTemplateMaker::PrintMem(const Char_t *opt) {
+void StPIDInterface::PrintMem(const Char_t *opt) {
   // Get ROOT memory structure
   MemInfo_t info;
   gSystem->GetMemInfo(&info);
@@ -185,13 +172,13 @@ void StTemplateMaker::PrintMem(const Char_t *opt) {
        << "\tSwap Total = " << info.fSwapTotal
        << "\tUsed = " << info.fSwapUsed
        << "\tFree = " << info.fSwapFree << endl;
-}// End StTemplateMaker::PrintMem
+}// End StPIDInterface::PrintMem
 
 
 
 // Create and store histograms for Primary Vertex reconstruction/quality
-void StTemplateMaker::BookVertexHistograms() {
-  std::cout << "StTemplateMaker:INFO  - Booking PV plots in subdirectory \033[31mPrimaryVertexPlots\033[39m of output TFile. " << endl;
+void StPIDInterface::BookVertexHistograms() {
+  std::cout << "StPIDInterface:INFO  - Booking PV plots in subdirectory \033[31mPrimaryVertexPlots\033[39m of output TFile. " << endl;
   
   // Set up TDirectory within the output file
   TDirectory *dirs[2] = {0};
@@ -213,13 +200,13 @@ void StTemplateMaker::BookVertexHistograms() {
   // Report on total used memory in parent directory
   dirs[0]->cd();
   PrintMem(dirs[1]->GetPath());
-}// End of StTemplateMaker::BookVertexHistograms
+}// End of StPIDInterface::BookVertexHistograms
 
 
 
 // Create and store histograms for reconstructed track information
-void StTemplateMaker::BookTrackHistograms() {
-  std::cout << "StTemplateMaker:INFO  - Booking Track info plots in subdirectory \033[31mTrackInfoPlots\033[39m of output TFile. " << endl;
+void StPIDInterface::BookTrackHistograms() {
+  std::cout << "StPIDInterface:INFO  - Booking Track info plots in subdirectory \033[31mTrackInfoPlots\033[39m of output TFile. " << endl;
   
   // Set up TDirectory within the output file
   TDirectory *dirs[2] = {0};
@@ -241,13 +228,13 @@ void StTemplateMaker::BookTrackHistograms() {
   // Report on total used memory in parent directory
   dirs[0]->cd();
   PrintMem(dirs[1]->GetPath());
-}// End of StTemplateMaker::BookTrackHistograms
+}// End of StPIDInterface::BookTrackHistograms
 
 
 
 // Create and store histograms for Primary Vertex reconstruction/quality
-void StTemplateMaker::BookPIDHistograms() {
-  std::cout << "StTemplateMaker:INFO  - Booking Particle Identification plots in subdirectory \033[31mPIDInfoPlots\033[39m of output TFile. " << endl;
+void StPIDInterface::BookPIDHistograms() {
+  std::cout << "StPIDInterface:INFO  - Booking Particle Identification plots in subdirectory \033[31mPIDInfoPlots\033[39m of output TFile. " << endl;
   
   // Set up TDirectory within the output file
   TDirectory *dirs[2] = {0};
@@ -271,7 +258,7 @@ void StTemplateMaker::BookPIDHistograms() {
   // Report on total used memory in parent directory
   dirs[0]->cd();
   PrintMem(dirs[1]->GetPath());
-}// End of StTemplateMaker::BookPIDHistograms
+}// End of StPIDInterface::BookPIDHistograms
 
 
 
@@ -279,7 +266,7 @@ void StTemplateMaker::BookPIDHistograms() {
 
 // The main analysis loop
 // This runs for every event
-Int_t StTemplateMaker::Make() {  
+Int_t StPIDInterface::Make() {  
   // Set up pointers to current event in the DSTs
   if (fIsPicoAnalysis) {// PicoDST
     fPicoDst = StPicoDst::instance();
@@ -331,7 +318,7 @@ Int_t StTemplateMaker::Make() {
   //================================================================================= Add analysis functionality above
   
   return kStOK;
-}// End of StTemplateMaker::Make()
+}// End of StPIDInterface::Make()
 
 
 
@@ -339,7 +326,7 @@ Int_t StTemplateMaker::Make() {
 
 // This macro is called by BFChain when the analysis is finished
 // This is where TObjects should be written and files closed
-Int_t StTemplateMaker::Finish() {
+Int_t StPIDInterface::Finish() {
   // change to output file main directory
   fOutputFile->cd();
 
@@ -351,13 +338,13 @@ Int_t StTemplateMaker::Finish() {
   // Close the file and return
   fOutputFile->Close();
   return kStOK;
-}// End of StTemplateMaker::Finish
+}// End of StPIDInterface::Finish
 
 
 
 //----------------------------------------------------------------------------------------------------- Class Helper Methods
 // Note that the methods here should be definitions of the virtual/forward declared methods
-// which are included in the class definition StTemplateMaker.h. They can be public or
+// which are included in the class definition StPIDInterface.h. They can be public or
 // private methods; Public methods are accessible to other files while private ones 
 // can be passed only between methods internal to the class (i.e. other methods in this file)
 
@@ -367,11 +354,11 @@ Int_t StTemplateMaker::Finish() {
 // header file, where the class implementation is defined!
 // 
 // This method is "private"
-void StTemplateMaker::TemplateHelper(/* inputs to the helper function */) {
+void StPIDInterface::TemplateHelper(/* inputs to the helper function */) {
   // Insert functionality here
   return;
-}// End of StTemplateMaker::TemplateHelper
+}// End of StPIDInterface::TemplateHelper
 
 
 
-//----------------------------------------------------------------------------------------------------- End of StTemplateMaker.cxx 
+//----------------------------------------------------------------------------------------------------- End of StPIDInterface.cxx 

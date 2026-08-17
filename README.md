@@ -7,6 +7,7 @@ Made by R. Hamilton in July 2026 by studing other codes, presentations including
  - [My experience of data analysis at STAR](https://drupal.star.bnl.gov/STAR/system/files/RMa\_ColMetg\_Junior.pdf) by Rongrong Ma
  - [Introduction to STAR software and makers](https://drupal.star.bnl.gov/STAR/system/files/STAR_soft_BNL_LK_2015_6_1.pdf) by Leszek Kosarzewski
  - [A common-MuDst tutorial](https://www.star.bnl.gov/public/comp/meet/RM200311/MuDstTutorial.pdf) by Sergey Panitkin
+
 No GenAI tools were used in the making of this template!
 
 ## Overview
@@ -20,7 +21,7 @@ In the current STAR software framework, all analysis must be run in a singularit
 
 After initializing singularity, use 
 
-> setDEV2.csh
+> source setDEV2.csh
 
 to initialize the relevant library versions. Compile the code together with the new StTemplateMaker class via
 
