@@ -24,13 +24,11 @@
 #ifndef STAR_StPIDInterface
 #define STAR_StPIDInterface
 
-// Inclusions necessary for the header file
-#ifndef StMaker_H
-#include "StMaker.h" // STAR base maker header
+#ifdef HLTCA_STANDALONE
+#include "RootTypesDef.h"
+#else
+#include "TObject.h"
 #endif
-
-// Additional classes
-#include "TMVA/Reader.h"
 
 // Other compiler, debug flags
 
@@ -85,28 +83,7 @@ private:
   StPicoDst*                        	fPicoDst;                          		// Pointer to PicoDST file to read
   
   // TObject pointers
-  TH1D*					fSampleHist;                                    // Sample histogram
-  TTree*                                fSampleTree;					// Sample tree
-  // *--------------- TTree Hooks ::
-  
-  // *-- Run level
-  
-  int bRun_id;                     	// Tree branch hook : run ID
-  
-  // *-- Event level
-  
-  int 		bEvent_id;              // Tree branch hook : Event ID
-  float 	bEvent_Vx;		// Tree branch hook : Event primary vertex x-coordinate
-  float 	bEvent_Vy; 		// Tree branch hook : Event primary vertex y-coordinate
-  float 	bEvent_Vr;		// Tree branch hook : Event primary vertex radial coordinate
-  float 	bEvent_Vz;		// Tree branch hook : Event primary vertex z-coordinate
-  float 	bEvent_Vxerr;		// Tree branch hook : Event primary vertex x error
-  float 	bEvent_Vyerr;		// Tree branch hook : Event primary vertex y error
-  float 	bEvent_Vrerr;		// Tree branch hook : Event primary vertex radial error
-  float 	bEvent_Vzerr;		// Tree branch hook : Event primary vertex z error
-  int           bEvent_vertexrank;      // Tree branch hook : Primary vertex rank
-  int 		bEvent_refmult;		// Tree branch hook : Event refmult     
-  int 		bEvent_tofmult;         // Tree branch hook : Event tofmult
+  TH1D*					fPIDHistograms[10];                                    // Sample histogram
   
   // *----------- END class variables with bitwise overwrite
   Char_t memory_zero_end[1];
@@ -117,14 +94,9 @@ private:
   // so that they are not overwritten by zeros in the memory
   
   // Class behavior flags
-  Bool_t fIsPicoAnalysis;
-  Bool_t fCollectTrackHistograms;
   Bool_t fCollectPIDHistograms;
-  Bool_t fCollectPVHistograms;
-  Bool_t fWriteDataTree;
   
   // Output data files/formatting
-  TString fOutputFileName;
   TFile* fOutputFile;
   
   
@@ -139,27 +111,15 @@ public:
   // Public class methods -- functions available outside of StTempalteMaker.cxx
   
   // Constructor
-  StPIDInterface(const char *name="PIDInterface"); // Name inherited from StMaker, hook for finding in BFC
-  // Destrictor
+  StPIDInterface();
+  // Destructor
   virtual       ~StPIDInterface();
-  // StMaker key hooks
-  virtual Int_t Init();
-  virtual Int_t InitRun(Int_t runumber);
-  virtual Int_t Make();
-  virtual Int_t Finish();
-  Bool_t        Check();
   // Plotting, QA, debug, memory, etc. utility
-  void           BookVertexHistograms();
-  void           BookTrackHistograms();
   void           BookPIDHistograms();
-  static void    PrintMem(const Char_t *opt = "");
+//  static void    PrintMem(const Char_t *opt = "");
   // Setters
-  void SetAnalysePicoDst() 			{ fIsPicoAnalysis = true;  }
-  void SetAnalyseMuDst()   			{ fIsPicoAnalysis = false; } 
-  void SetCollectTrackHistograms() 		{ fCollectTrackHistograms = true; }
   void SetCollectPIDHistograms() 		{ fCollectPIDHistograms = true; }
-  void SetCollectPVHistograms() 		{ fCollectPVHistograms = true; }
-  void SetOutputFileName(TString name)          { fOutputFileName = name; }
+  void SetOutputFile(TFile* newfile)            { fOutputFile = newfile; }
 
   // Getters
   TFile* GetOutputFile() 			{ return fOutputFile; }

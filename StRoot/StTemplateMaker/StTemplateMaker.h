@@ -54,7 +54,7 @@ class StMuDst;
 class StRefMultCorr;
 
 // Other classes
-
+class StPIDInterface;
 
 
 // Static variables used elsewhere in the class 
@@ -83,6 +83,9 @@ private:
   StMuDst*                         	fMuDst; 					// Pointer to MuDST file to read
   StPicoDst*                        	fPicoDst;                          		// Pointer to PicoDST file to read
   
+  // Interface helper classes
+  StPIDInterface*                       fPIDInterface;                                  // Class to help with PID tasks
+
   // TObject pointers
   TH1D*					fSampleHist;                                    // Sample histogram
   TTree*                                fSampleTree;					// Sample tree
@@ -139,7 +142,7 @@ public:
   
   // Constructor
   StTemplateMaker(const char *name="Template"); // Name inherited from StMaker, hook for finding in BFC
-  // Destrictor
+  // Destructor
   virtual       ~StTemplateMaker();
   // StMaker key hooks
   virtual Int_t Init();

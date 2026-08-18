@@ -54,6 +54,12 @@
 #include "StRefMultCorr/StRefMultCorr.h"
 #include "StRefMultCorr/CentralityMaker.h"
 
+// StHelperInterface classes
+#include "StPIDInterface/StPIDInterface.h"
+
+
+class StPIDInterface;
+
 // One can include local classes from other packages, so long as they are in the StRoot directory
 // Any code or external packages not implemented in StRoot (https://github.com/star-bnl/star-sw/tree/main/StRoot)
 // should be stored in the local StRoot directory, like this class which lives in [analysis_dir]/StRoot/StTemplateMaker
@@ -89,8 +95,12 @@ StTemplateMaker::StTemplateMaker(const char *name) : StMaker(name), // Inheritan
   // In principle this is in std namespace but current rcf has GNU implementation instead
   memset(memory_zero_begin, 0, memory_zero_end - memory_zero_begin + 1);
   
+  std::cout << "attempting to initialize PID interface..." << std::endl;
 
   // Add any initializers that should be run on object creation (i.e. as a constructor)
+  fPIDInterface = new StPIDInterface();
+  
+  // Set remaining pointers as NULL
   fOutputFile = NULL;
 }// End StTemplateMaker::Constructor
 
@@ -101,8 +111,13 @@ StTemplateMaker::StTemplateMaker(const char *name) : StMaker(name), // Inheritan
 //
 // SafeDeleta() checks that the given pointer is not NULL before deleting it.
 StTemplateMaker::~StTemplateMaker() {
-  SafeDelete(fOutputFile);
+  // Custom classes
+  SafeDelete(fPIDInterface);
 
+  // Files
+  SafeDelete(fOutputFile);
+  
+  // ROOT objects
   SafeDelete(fSampleHist);
   SafeDelete(fSampleTree);
 }// End of StTemplateMaker::~StTemplateMaker
@@ -171,22 +186,6 @@ Int_t StTemplateMaker::InitRun(Int_t runumber) {
 
 
 
-// Print information about memory usage
-void StTemplateMaker::PrintMem(const Char_t *opt) {
-  // Get ROOT memory structure
-  MemInfo_t info;
-  gSystem->GetMemInfo(&info);
-
-  // Report on used memory
-  cout << opt 
-       << "\tMemory : Total = " << info.fMemTotal 
-       << "\tUsed = " << info.fMemUsed
-       << "\tFree = " << info.fMemFree
-       << "\tSwap Total = " << info.fSwapTotal
-       << "\tUsed = " << info.fSwapUsed
-       << "\tFree = " << info.fSwapFree << endl;
-}// End StTemplateMaker::PrintMem
-
 
 
 // Create and store histograms for Primary Vertex reconstruction/quality
@@ -243,9 +242,14 @@ void StTemplateMaker::BookTrackHistograms() {
   PrintMem(dirs[1]->GetPath());
 }// End of StTemplateMaker::BookTrackHistograms
 
-
-
-// Create and store histograms for Primary Vertex reconstruction/quality
+#if 0
+void StTemplateMaker::BookPIDHistograms() {
+  std::cout << "attempting to pass into PID helper class..." << std::endl;
+  fPIDInterface->BookPIDHistograms();
+  return;
+}
+#else 
+// Create and store histograms for Particle Identification (PID)
 void StTemplateMaker::BookPIDHistograms() {
   std::cout << "StTemplateMaker:INFO  - Booking Particle Identification plots in subdirectory \033[31mPIDInfoPlots\033[39m of output TFile. " << endl;
   
@@ -272,6 +276,23 @@ void StTemplateMaker::BookPIDHistograms() {
   dirs[0]->cd();
   PrintMem(dirs[1]->GetPath());
 }// End of StTemplateMaker::BookPIDHistograms
+#endif
+
+// Print information about memory usage
+void StTemplateMaker::PrintMem(const Char_t *opt) {
+  // Get ROOT memory structure
+  MemInfo_t info;
+  gSystem->GetMemInfo(&info);
+
+  // Report on used memory
+  std::cout << opt 
+            << "\tMemory : Total = " << info.fMemTotal 
+            << "\tUsed = " << info.fMemUsed
+            << "\tFree = " << info.fMemFree
+            << "\tSwap Total = " << info.fSwapTotal
+            << "\tUsed = " << info.fSwapUsed
+            << "\tFree = " << info.fSwapFree << std::endl;
+}// End StTemplateMaker::PrintMem
 
 
 
@@ -360,6 +381,7 @@ Int_t StTemplateMaker::Finish() {
 // which are included in the class definition StTemplateMaker.h. They can be public or
 // private methods; Public methods are accessible to other files while private ones 
 // can be passed only between methods internal to the class (i.e. other methods in this file)
+
 
 
 // A sample helper method
