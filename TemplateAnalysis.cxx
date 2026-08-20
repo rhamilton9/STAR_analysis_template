@@ -94,6 +94,8 @@ void TemplateAnalysis(Long64_t N = 0,
   // *----------------------------- Interface with Custom Analysis Class
 
   // Load all custom classes not included in root standard libraries
+  // Include custom libraries
+  gSystem->Load("StHelperInterface");
   gSystem->Load("StTemplateMaker");
 
   // Construct the StTemplateMaker and initialize its variables
@@ -103,6 +105,7 @@ void TemplateAnalysis(Long64_t N = 0,
   templateAnalysisMaker->SetCollectPIDHistograms();
   templateAnalysisMaker->SetCollectTrackHistograms();
   templateAnalysisMaker->SetCollectPVHistograms();
+  templateAnalysisMaker->SetCollectJetHistograms();
   
   // Specialized settings for PicoDST, MuDST
   if(isPico) {

@@ -99,12 +99,14 @@ void StPIDInterface::BookPIDHistograms() {
   
   // Set up TDirectory within the output file
   TDirectory *dirs[2] = {0};
-  dirs[0] = TDirectory::CurrentDirectory(); assert(dirs[0]);
+  dirs[0] = TDirectory::CurrentDirectory(); 
+  assert(dirs[0]);
   dirs[0]->cd();
   
   // Make subdirectory "PIDInfoPlots" within the parent directory
   if ( !dirs[0]->GetDirectory("PIDInfoPlots") ) dirs[0]->mkdir("PIDInfoPlots");
-  dirs[1] = dirs[0]->GetDirectory("PIDInfoPlots"); assert(dirs[1]);
+  dirs[1] = dirs[0]->GetDirectory("PIDInfoPlots"); 
+  assert(dirs[1]);
   dirs[1]->cd();
   
   std::cout << "In the PID helper class!" << std::endl;

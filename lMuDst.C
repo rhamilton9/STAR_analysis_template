@@ -13,13 +13,15 @@ void lMuDst(Int_t opt = -2,
   
   // Include centrality libraries
   gSystem->Load("StRefMultCorr");
-  
-  // Include custom libraries
-  //gSystem->AddIncludePath("");
-  gSystem->Load("StPIDInterface");
-  
+ 
+  // Include FastJet libraries
+  gSystem->Load("libfastjet");
+  gSystem->Load("libfastjettools");
+
   // Load STAR chain analysis class
   gROOT->LoadMacro("bfc.C");
+  
+  // Start the chain
   TString Chain(copt);
   if (TString(gSystem->Getenv("STAR_VERSION")) == ".DEV2") Chain += ",TMVARank";
   

@@ -53,12 +53,10 @@ class StPicoDst;
 class StMuDst;
 class StRefMultCorr;
 
-// Other classes
-class StPIDInterface;
-
 
 // Static variables used elsewhere in the class 
-
+class StPIDInterface;
+class StJetInterface;
 
 
 // ----------------------------------------------------------- Class definition
@@ -85,6 +83,7 @@ private:
   
   // Interface helper classes
   StPIDInterface*                       fPIDInterface;                                  // Class to help with PID tasks
+  StJetInterface*                       fJetInterface;                                  // Class to help with Jet clustering and BG handling
 
   // TObject pointers
   TH1D*					fSampleHist;                                    // Sample histogram
@@ -110,6 +109,13 @@ private:
   int 		bEvent_refmult;		// Tree branch hook : Event refmult     
   int 		bEvent_tofmult;         // Tree branch hook : Event tofmult
   
+  // Tes jet clustering
+  int bJet_nconstituents;
+  float bJet_pt;
+  float bJet_phi;
+  float bJet_eta;
+  float bJet_area;
+
   // *----------- END class variables with bitwise overwrite
   Char_t memory_zero_end[1];
   
@@ -122,6 +128,7 @@ private:
   Bool_t fIsPicoAnalysis;
   Bool_t fCollectTrackHistograms;
   Bool_t fCollectPIDHistograms;
+  Bool_t fCollectJetHistograms;
   Bool_t fCollectPVHistograms;
   Bool_t fWriteDataTree;
   
@@ -154,12 +161,14 @@ public:
   void           BookVertexHistograms();
   void           BookTrackHistograms();
   void           BookPIDHistograms();
+  void           BookJetHistograms();
   static void    PrintMem(const Char_t *opt = "");
   // Setters
   void SetAnalysePicoDst() 			{ fIsPicoAnalysis = true;  }
   void SetAnalyseMuDst()   			{ fIsPicoAnalysis = false; } 
   void SetCollectTrackHistograms() 		{ fCollectTrackHistograms = true; }
   void SetCollectPIDHistograms() 		{ fCollectPIDHistograms = true; }
+  void SetCollectJetHistograms() 		{ fCollectJetHistograms = true; }
   void SetCollectPVHistograms() 		{ fCollectPVHistograms = true; }
   void SetOutputFileName(TString name)          { fOutputFileName = name; }
 
