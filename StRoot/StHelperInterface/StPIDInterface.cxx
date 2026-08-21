@@ -84,7 +84,7 @@ StPIDInterface::StPIDInterface() :
 // SafeDelete() all pointers initialized with "new" keyword
 // because the memory is not erased outside of the relevant scope
 //
-// SafeDeleta() checks that the given pointer is not NULL before deleting it.
+// SafeDelete() checks that the given pointer is not NULL before deleting it.
 StPIDInterface::~StPIDInterface() {
   SafeDelete(fOutputFile);
 

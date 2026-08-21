@@ -105,10 +105,14 @@ private:
   double   fJetRadius;
   double   fJetMinPt;
   double   fGhostArea;
+  double   fHadCorrCoeff;
 
   // Class behavior flags
-  Bool_t   fCollectJetHistograms;
-  
+  Bool_t   fCollectJetHistograms;  // Control whether the code writes summary histograms
+  Bool_t   fClusterEMCalTowers;    // Include EMCal towers in jet clustering, for full jets
+  Bool_t   fHadCorrExactTowMatch;  // Include in hadronic correction BEMC towers with exact matches
+  BooL_t   fHadCorrCloseTowMatch;  // Include in hadronic correction BEMC towers with close matches
+
   // Output data files/formatting
   TFile*   fOutputFile;
   

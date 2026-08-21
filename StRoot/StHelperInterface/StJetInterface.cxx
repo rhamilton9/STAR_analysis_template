@@ -48,6 +48,8 @@
 #include "StPicoEvent/StPicoEvent.h"
 #include "StPicoEvent/StPicoTrack.h"
 #include "StPicoEvent/StPicoBTofPidTraits.h"
+#include "StPicoEvent/StPicoBEmcPidTraits.h"
+#include "StPicoEvent/StPicoBTowHit.h"
 
 // MuDST classes
 #include "StMuDSTMaker/COMMON/StMuDst.h"
@@ -94,7 +96,11 @@ StJetInterface::StJetInterface() :
 	fJetRadius(0.4),                              // Radius of jets in eta-phi space
         fJetMinPt(0),                                 // Minimum pT of jet to cluster
 	fGhostArea(0.01),                             // Area of ghosts in area grid
+	fHadCorrCoeff(1.00),                          // Coefficient for hadronic correction
 	fCollectJetHistograms(true),                  // Switch for collecting Jet data histograms
+	fClusterEMCalTowers(true),                    // Switch for full jet / charged jet clustering
+	fHadCorrExactTowMatch(true),                  // Switch for including exact BTow matches in hadronic correction
+	fHadCorrCloseTowMatch(true),                  // Switch for including close BTow matches in hadronic correction
 	fOutputFile(nullptr) {                        // TFile pointer to output file
   // Set global pointer to &this on construction
   gStJetInterface = this;
@@ -134,7 +140,7 @@ StJetInterface::StJetInterface() :
 // SafeDelete() all pointers initialized with "new" keyword
 // because the memory is not erased outside of the relevant scope
 //
-// SafeDeleta() checks that the given pointer is not NULL before deleting it.
+// SafeDelete() checks that the given pointer is not NULL before deleting it.
 StJetInterface::~StJetInterface() {
   SafeDelete(fOutputFile);
 
@@ -418,13 +424,30 @@ int StJetInterface::ClusterPicoJets(StPicoDst* picoDst) {
   
  
   // TODO handle vertex quality, event quality in separate class
-  if (pico_event->ranking() < 0) return 0;
+  //if (pico_event->ranking() < 0) return 0;
+  
+
+  // *------- Record Barrel EM Cal tower hits along with candidate energy to match to particles later
+  uint32_t nBEMC_hits = picoDst->numberOfBTowHits();
+  std::map<uint32_t, double> mapBEMC_index_energy;
+  if (fClusterEMCalTowers) for (uint32_t i_tower = 0; i_tower < nTracks_global; ++i_tower) {
+    StPicoBTowHit* cTower = picoDst->btowHit(i_tower);
+
+    // Skip bad towers
+    if (cTower->isBad()) continue;
+    
+    // Add {index, energy} to hash map
+    mapBEMC_index_energy->insert(i_tower, cTower->energy());
+  }// End of bTow selection
+
+  
+  // *------- Add TPC Tracks to clustering list
 
   uint32_t nTracks_global = pico_event->numberOfGlobalTracks();
   //uint32_t nTracks_primary = picoDst->numberOfPrimaryTracks();
   
   for (uint32_t i_track = 0; i_track < nTracks_global; i_track++) {
-    StPicoTrack *pTrack = picoDst->track(i_track);
+    StPicoTrack* pTrack = picoDst->track(i_track);
     
     if (!pTrack) continue;
 
@@ -449,9 +472,37 @@ int StJetInterface::ClusterPicoJets(StPicoDst* picoDst) {
     
     // Add to FastJet vector
     stable_particles.push_back(jTrack);
+    
 
+    if (!fClusterEMCalTowers) continue;
+    // Check if the particle is matched to a BEMC tower, and remove 
+    // its energy to avoid double counting. We only remove tracks
+    // which will be considered in the analysis (i.e. pass all cuts)
+    if (pTrack->isBemcMatchedTrack()) {
+      int matched_tow_index = pTrack->bemcTowerIndex();
+      // Include towers if they are exact/close matches as specified in the class
+      // See https://www.star.bnl.gov/webdata/dox/html/classStPicoTrack.html#a89b5a7297850a04b8bdd1cc0620790f8
+      if (!fHadCorrExactTowMatch && matched_tow_index > 0) continue;
+      if (!fHadCorrCloseTowMatch && matched_tow_index < 0) continue;
+      
+      // Subtract the momentum of the hadronic track from the tower
+      mapBEMC_index_energy[std::abs(matched_tow_index) - 1] -= fHadCorrCoeff * jTrack.E();
+
+    }// End of BEMC matching consideration
   }// End of PicoDst event track loop
   
+
+  // Include hadronic-corrected BEMC towers in the clustering if desired
+  if (fClusterEMCalTowers) for (std::map<uint32_t, double>::iterator it = mapBEMC_index_energy.begin();
+                                it != mapBEMC_index_energy.end(); ++it) {
+    // Skip negative energy towers
+    if (it->second < 0) continue;
+
+    // Add the tower to the clustering as a massless object
+    //
+    
+    //TODO convert to FastJet PseudoJet
+  }
 
   // Perform the clustering
   fastjet::ClusterSequenceArea cluster_area(stable_particles, 
