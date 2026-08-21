@@ -155,6 +155,11 @@ Int_t StTemplateMaker::Init() {
   if (fCollectJetHistograms)    BookJetHistograms();
   
 
+  // Set jet settings through StJetInterface
+  fJetInterface->SetJetMinPt(5);
+  fJetInterface->SetGhostArea(0.01);
+
+
   // Set up TTree for run/event information
   // Can be easily modified to include other desired information
   if (fWriteDataTree) { 
@@ -352,13 +357,13 @@ Int_t StTemplateMaker::Make() {
   fastjet::JetAlgorithm  jet_algo         = fastjet::antikt_algorithm;
   fastjet::JetDefinition jet_definition   = fastjet::JetDefinition(jet_algo, jet_radius, fastjet::E_scheme);
   
-  // Alternate --fJetInterface
-  fJetInterface->SetJetMinPt(5);
-
   // Add tracks to stable particle vector
   std::vector<fastjet::PseudoJet> stable_particles;
   if (fIsPicoAnalysis) {// PicoDST
     StPicoEvent* pico_event = fPicoDst->event();
+
+    if (!pico_event) return kStOk;
+
     TVector3 pos_PV = pico_event->primaryVertex();
     
     // Branch elements for TTree
@@ -382,6 +387,8 @@ Int_t StTemplateMaker::Make() {
     for (uint32_t i_track = 0; i_track < nTracks_global; i_track++) {
       StPicoTrack *pTrack = fPicoDst->track(i_track);
       
+      if (!pTrack) continue;
+
       // Track quality cuts :: 
       if (!pTrack->isPrimary() ||                                                // Primary tracks
           pTrack->pPt() <= 0.2 ||                                                // Track pT must be at least 0.2 GeV
@@ -446,6 +453,12 @@ Int_t StTemplateMaker::Make() {
       fSampleTree->Fill();
 
     }// End of jet loop
+    
+    
+    
+    
+    
+    
     // concurrently pass to jet interface to test
     fJetInterface->ClusterPicoJets(fPicoDst);
   } else { // MuDST
@@ -480,6 +493,8 @@ Int_t StTemplateMaker::Finish() {
   
   // Close the file and return
   fOutputFile->Close();
+
+  std::cout << "Test debug (StTemplateMaker::Finish)" << std::endl;
   return kStOK;
 }// End of StTemplateMaker::Finish
 

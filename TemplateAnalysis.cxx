@@ -50,7 +50,7 @@
 //
 // The single/double quotes are necessary for the file names to be properly read as strings
 void TemplateAnalysis(Long64_t N = 0, 
-                      const Char_t* input = "pp2012.list",
+                      const Char_t* input = "isobar2018.list",
                       const Char_t* output = "template_out.root",
                       bool isPico = true) {
   // Check for necessary complier information
@@ -147,7 +147,7 @@ void TemplateAnalysis(Long64_t N = 0,
 
   // Begin the event loop
   chain->EventLoop(nevent);
-
+  std::cout << "debug final" << std::endl;
 #endif 
   return;
 }// End of TemplateAnalysis.cxx

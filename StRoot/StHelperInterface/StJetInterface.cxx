@@ -22,11 +22,25 @@
 #include "TTree.h"
 #include "TSystem.h"
 #include "TH1D.h"
+#include "TH2D.h"
 
 // FastJet classes
 #include "fastjet/JetDefinition.hh"
 #include "fastjet/PseudoJet.hh"
+// Area and Clustering
 #include "fastjet/ClusterSequence.hh"
+#include "fastjet/ClusterSequenceArea.hh"
+#include "fastjet/ClusterSequence1GhostPassiveArea.hh"
+#include "fastjet/ClusterSequenceActiveArea.hh"
+#include "fastjet/ClusterSequenceActiveAreaExplicitGhosts.hh"
+#include "fastjet/ClusterSequencePassiveArea.hh"
+#include "fastjet/GhostedAreaSpec.hh"
+#include "fastjet/AreaDefinition.hh"
+// Background estimation
+#include "fastjet/Selector.hh"
+#include "fastjet/tools/BackgroundEstimatorBase.hh"
+#include "fastjet/tools/JetMedianBackgroundEstimator.hh"
+#include "fastjet/tools/Subtractor.hh"
 
 // PicoDST classes 
 #include "StPicoDstMaker/StPicoDstMaker.h"
@@ -62,9 +76,13 @@ StJetInterface* gStJetInterface;
 
 // Static declarations of jet algo/definition to 
 // avoid redefinition on every event
-fastjet::JetAlgorithm gJetAlgorithm;
-fastjet::RecombinationScheme gJetRecombinationScheme;
-fastjet::JetDefinition gJetDefinition;
+fastjet::JetAlgorithm            gJetAlgorithm;
+fastjet::RecombinationScheme     gJetRecombinationScheme;
+fastjet::JetDefinition           gJetDefinition;
+fastjet::AreaType                gJetAreaType;
+
+// For background/Rho estimation
+fastjet::JetDefinition           gBgJetDefinition;
 
 //----------------------------------------------------------------------------------------------------- Constructor
 StJetInterface::StJetInterface() :
@@ -72,8 +90,10 @@ StJetInterface::StJetInterface() :
 //      These variables can be changed only by interacting with class setters, defined in the header file.
 //      Defining these variables here declares them available as external objects to other methods in this file
 //      that live outside the class body
-        fJetRadius(0.4),                              // Radius of jets in eta-phi space
+        fMaxRapidity(1.0),                            // Maximum (pseudo)rapidity range to accept tracks
+	fJetRadius(0.4),                              // Radius of jets in eta-phi space
         fJetMinPt(0),                                 // Minimum pT of jet to cluster
+	fGhostArea(0.01),                             // Area of ghosts in area grid
 	fCollectJetHistograms(true),                  // Switch for collecting Jet data histograms
 	fOutputFile(nullptr) {                        // TFile pointer to output file
   // Set global pointer to &this on construction
@@ -91,10 +111,16 @@ StJetInterface::StJetInterface() :
   // Add any initializers that should be run on object creation (i.e. as a constructor)
   fOutputFile = gFile;
 
-  // Initialize jet algorithm, definition
+  // Initialize jet algorithm, definition, area definition
   gJetAlgorithm = fastjet::antikt_algorithm;
   gJetRecombinationScheme = fastjet::E_scheme;
   gJetDefinition = fastjet::JetDefinition(gJetAlgorithm, fJetRadius, gJetRecombinationScheme);
+ 
+  gJetAreaType = fastjet::active_area_explicit_ghosts;
+
+  // Initialize background estimator 
+  gBgJetDefinition = fastjet::JetDefinition(fastjet::kt_algorithm, 0.4, fastjet::E_scheme);
+
   std::cout << "StJetInterface:INFO  - Starting FastJet with JetDefinition :: ";
   PrintJetDefinition();
 }// End StJetInterface::Constructor
@@ -134,28 +160,25 @@ void StJetInterface::BookJetHistograms() {
   assert(dirs[1]);
   dirs[1]->cd();
   
-  std::cout << "In the Jet helper class!" << std::endl;
-
   // Set up Jet plots in this directory
+  // 1D Hist
+  fBgInfoHistograms[0]      = new TH1D("hBackgroundRho",";BG Estimate #rho [GeV/c];Event count",                100, 0, 100);
+  fBgInfoHistograms[1]      = new TH1D("hBackgroundSigma",";BG Estimate #sigma [GeV/c];Event count",            25, 0, 50);
+  fCJetNConstituentsHist    = new TH1D("hChargedJetConstituents",";Constituent Multiplicity;Charged jet count", 20, 0, 20);
+  fCJetPtHist[0]            = new TH1D("hChargedJetPtRaw",";Raw #it{p}_{T} [GeV/c];Charged jet count",          150, 0, 150); 
+  fCJetPtHist[1]            = new TH1D("hChargedJetPt",";#it{p}_{T} [GeV/c];Charged jet count",                 100, 0, 100); 
+  fCJetArea                 = new TH1D("hChargedJetArea",";Jet Area [rad^{2}];Charged jet count",               100, 0, TMath::Pi());
   
-  // Jet pT
-  fJetHistograms[0] = new TH1D("hChargedJetConstituents",";Constituent Multiplicity;Charged jet count",
-                               20, 0, 20);
-  fJetHistograms[1] = new TH1D("hChargedJetPt",";#it{p}_{T} [GeV/c];Charged jet count",
-                               100, 0, 100); 
-  fJetHistograms[2] = new TH1D("hChargedJetPhi",";#phi [rad];Charged jet count",
-                               100, -TMath::Pi(), TMath::Pi());
-  fJetHistograms[3] = new TH1D("hChargedJetEta",";#eta [rad];Charged jet count",
-                               100, -1, 1);
-  fJetHistograms[4] = new TH1D("hChargedJetArea",";Jet Area [rad^{2}];Charged jet count",
-                               100, 0, TMath::Pi());
-
+  // 2D hist
+  fCJetRapPhiHist           = new TH2D("hChargedJetEtaPhi",";#eta;#phi;Charged jet count",                      120,-1.1,1.1, 100, -TMath::Pi(), TMath::Pi());
+  
   // End of Jet plot construction
   
 
 
   // Return to parent directory
   dirs[0]->cd();
+  return;
 }// End of StJetInterface::BookJetHistograms
 
 
@@ -164,15 +187,27 @@ void StJetInterface::BookJetHistograms() {
 void StJetInterface::WriteJetHistograms() {
   TDirectory* holddir = TDirectory::CurrentDirectory();
   
+  // Check that the directory exists
+  //if ( !holddir->GetDirectory("JetInfoPlots") ) holddir->mkdir("JetInfoPlots");
   TDirectory* outdir = holddir->GetDirectory("JetInfoPlots"); 
   assert(outdir);
   outdir->cd();
 
-  for (int i = 0; i <= 4; ++i) {
-    fJetHistograms[i]->Write(fJetHistograms[i]->GetName(), TObject::kOverwrite);
+  // Write TObjects to JetInfoPlots directory
+  for (int i = 0; i < 2; ++i) {
+    fBgInfoHistograms[i]->Write();
+    fCJetPtHist[i]->Write();
   }
-
+  
+  fCJetNConstituentsHist->Write();
+  fCJetRapPhiHist->Write();
+  fCJetArea->Write();
+  // return to base directory
+  
+  
   holddir->cd();
+  std::cout << "Test debug, in StJetInterface::WriteJetHistograms." << std::endl;
+  return;
 }
 
 
@@ -264,6 +299,60 @@ void StJetInterface::SetRecombinationScheme(TString scheme) {
 
 
 
+// Set the jet area type
+//     https://fastjet.fr/repo/fastjet-doc-3.5.1.pdf
+//     https://fastjet.fr/repo/doxygen-3.5.1/namespacefastjet.html#a89eb2ee22a1eaa58768a38be0bf77b45
+void StJetInterface::SetJetAreaType(TString area) {
+  area.ToLower();
+  if (area.Contains("active") && area.Contains("explicit")) 
+    gJetAreaType = fastjet::active_area_explicit_ghosts;
+  else if (area.Contains("active")) 
+    gJetAreaType = fastjet::active_area; 
+  else if (area.Contains("passive") && area.Contains("one")) 
+    gJetAreaType = fastjet::one_ghost_passive_area; 
+  else if (area.Contains("passive")) 
+    gJetAreaType = fastjet::passive_area;
+  else {
+    std::cout << "\033[31mWarning\033[39m:: Unrecognized jet area type " << area << "! Check inputs." << std::endl;
+    return;
+  }// End of setting area type
+
+  // Re-initialize jet area
+  std::cout << "StJetInterface:INFO  - Modified jet area type, current JetDefinition :: ";
+  PrintJetDefinition(); 
+
+  return;
+}// End of StJetInterface::SetJetAreaType
+
+
+
+// Set the rapidity maximum acceptance of the detector
+// This requires a modification of the AreaDefinition
+//    https://fastjet.fr/repo/doxygen-3.5.1/classfastjet_1_1GhostedAreaSpec.html#adbb378c9a5916085df61c23b65ab68df
+void StJetInterface::SetMaxRapidity(double max_rap) {
+  fMaxRapidity = max_rap;
+  
+  std::cout << "StJetInterface:INFO  - Modified max rapidity, current JetDefinition :: ";
+  PrintJetDefinition(); 
+  
+  return;
+}// End of StJetInterface::SetMaxRapidity
+
+
+
+// Set the requested eta-phi area occupied by ghosts
+// This requires a modification of the AreaDefinition
+//    https://fastjet.fr/repo/doxygen-3.5.1/classfastjet_1_1GhostedAreaSpec.html#adbb378c9a5916085df61c23b65ab68df
+void StJetInterface::SetGhostArea(double ghost_area) {
+  fGhostArea = ghost_area;
+  
+  std::cout << "StJetInterface:INFO  - Modified ghost area, current JetDefinition :: ";
+  PrintJetDefinition(); 
+  
+  return;
+}// End of StJetInterface::SetGhostArea
+
+
 // Print the current jet definition in legible terms
 void StJetInterface::PrintJetDefinition() {
   std::cout << "{ ";
@@ -293,7 +382,22 @@ void StJetInterface::PrintJetDefinition() {
     case (fastjet::external_scheme):       std::cout << "external-scheme";  break;
     default:                               std::cout << "unknown scheme";   break;
   }// End of recombination scheme
-  std::cout << " }" << std::endl;
+  
+  std::cout << "; Area [ ";
+  
+  switch (gJetAreaType) {
+    case (fastjet::active_area):           std::cout << "Active(grid), ";   break;
+    case (fastjet::passive_area):          std::cout << "Passive(random), ";break;
+    case (fastjet::active_area_explicit_ghosts):       std::cout << "explicit active, ";     break;
+    case (fastjet::one_ghost_passive_area):            std::cout << "one-ghost passive, ";   break;
+    default:                                           std::cout << "undefined";             break;
+  }
+  
+  std::cout << "ghosts to y = " << fMaxRapidity;
+  std::cout << ", ghost area = " << fGhostArea;
+  
+  std::cout << " ] }" << std::endl;
+  return;
 }// End of StJetInterface::PrintJetDefinition
 
 
@@ -307,9 +411,14 @@ int StJetInterface::ClusterPicoJets(StPicoDst* picoDst) {
   // Add tracks to stable particle vector
   std::vector<fastjet::PseudoJet> stable_particles;
   StPicoEvent* pico_event = picoDst->event();
+
+  if (!pico_event) return 0;
+
   TVector3 pos_PV = pico_event->primaryVertex();
   
-  
+ 
+  // TODO handle vertex quality, event quality in separate class
+  if (pico_event->ranking() < 0) return 0;
 
   uint32_t nTracks_global = pico_event->numberOfGlobalTracks();
   //uint32_t nTracks_primary = picoDst->numberOfPrimaryTracks();
@@ -317,7 +426,10 @@ int StJetInterface::ClusterPicoJets(StPicoDst* picoDst) {
   for (uint32_t i_track = 0; i_track < nTracks_global; i_track++) {
     StPicoTrack *pTrack = picoDst->track(i_track);
     
+    if (!pTrack) continue;
+
     // Track quality cuts :: 
+    // TODO move track cuts to separate interface
     if (!pTrack->isPrimary() ||                                                // Primary tracks
         pTrack->pPt() <= 0.2 ||                                                // Track pT must be at least 0.2 GeV
         pTrack->pPt() >= 30. ||                                                // Track pT must be at most 30 GeV
@@ -333,59 +445,74 @@ int StJetInterface::ClusterPicoJets(StPicoDst* picoDst) {
 			      TMath::Hypot(PION_MASS, pTrack->pPtot()) );
     
     // Check that the pseudorapidity of the track is in bounds
-    if (std::fabs(jTrack.pseudorapidity()) >= 1.0) continue;
+    if (std::fabs(jTrack.pseudorapidity()) >= fMaxRapidity) continue;
     
     // Add to FastJet vector
     stable_particles.push_back(jTrack);
 
   }// End of PicoDst event track loop
   
-  /*
-  if (ghost_grid_area) {
-    fastjet::PseudoJet ghost;
-    for (int ir = 0; ir <= nGhost_rap; ++ir) {
-      // For massless particles like ghosts, rapidity = pseudorapidity
-      double longitude = (ir + 0.5) * (2.0 / nGhost_rap) - 1.0;
-      for (int iphi = 1; iphi <= nGhost_phi; ++iphi) {
-        double phi = (iphi + 0.5) * (TMath::TwoPi() / nGhost_phi) - TMath::Pi();
-        ghost.reset_momentum_PtYPhiM(ghost_pt, longitude, phi, 0);
-        stable_particles.push_back(ghost);
-      }
-    }// End of ghost loop
-  }// End of ghost append
-  */
-
 
   // Perform the clustering
-  fastjet::ClusterSequence clustering(stable_particles, gJetDefinition);
-  std::vector<fastjet::PseudoJet> final_jets = fastjet::sorted_by_pt(clustering.inclusive_jets(fJetMinPt));
+  fastjet::ClusterSequenceArea cluster_area(stable_particles, 
+                                            gJetDefinition, 
+                                            fastjet::AreaDefinition(gJetAreaType, 
+					                            fastjet::GhostedAreaSpec(fMaxRapidity, 1, fGhostArea)));
+  std::vector<fastjet::PseudoJet> raw_jets = cluster_area.inclusive_jets(fJetMinPt);
+  // End of jet clustering
 
-  for (fastjet::PseudoJet jet : final_jets) {
-    if (std::fabs(jet.eta()) >= 1.0 - fJetRadius) continue; 
+  // Perform rho background esimtation
+  fastjet::ClusterSequenceArea cluster_bg(stable_particles, 
+                                          gBgJetDefinition, 
+			                  fastjet::AreaDefinition(fastjet::active_area_explicit_ghosts,        
+				                                  fastjet::GhostedAreaSpec(fMaxRapidity, 1, fGhostArea)));
+  fastjet::JetMedianBackgroundEstimator bg_estimator(fastjet::SelectorAbsRapMax(fMaxRapidity),
+                                                     cluster_bg);
+  
+  // Tabulate BG results
+  double bg_rho = bg_estimator.rho();
+  fBgInfoHistograms[0]->Fill(bg_rho);
+  double bg_sig = bg_estimator.sigma();
+  fBgInfoHistograms[1]->Fill(bg_sig);
+  
+  // Complete the rho * A background pT contribution subtraction
+  fastjet::Subtractor subtractor(&bg_estimator);
+  std::vector<fastjet::PseudoJet> subtracted_jets = subtractor(raw_jets);
+  
+  
+  
+  // Store observables from the resulting jets
+  for (uint32_t i = 0; i < subtracted_jets.size(); ++i) {
+    fastjet::PseudoJet jet = subtracted_jets[i];
+    if (std::fabs(jet.eta()) >= fMaxRapidity - fJetRadius) continue; 
     
-    // Compute area and tabulate constituents, removing ghosts
+    // Tabulate constituents with room for additional cuts
     int jet_nconstituents = 0;
-    int jet_area = 0;
-    double dA = (2.0 / nGhost_rap) * (TMath::TwoPi() / nGhost_phi);
     for (fastjet::PseudoJet c : jet.constituents()) {
-      // Increment area for ghost
-      if (c.pt() <= 1e-50) {jet_area += dA; continue;}
       
-      // Otherwise, a real track
+      // Not a ghost
+      if (c.pt() < 1e-50) continue;
+
+      // Could add other selections here, e.g. not an EMCal tower.
+      
       ++jet_nconstituents;
     }// End of constituent loop
-
+    
     // populate histograms
     if (fCollectJetHistograms) {
-      fJetHistograms[0]->Fill(jet_nconstituents);
-      fJetHistograms[1]->Fill(jet.pt());
-      fJetHistograms[2]->Fill(jet.phi_std());
-      fJetHistograms[3]->Fill(jet.pseudorapidity());
+      fCJetPtHist[1]->Fill(jet.pt());
+      fCJetNConstituentsHist->Fill(jet_nconstituents);
+      fCJetRapPhiHist->Fill(jet.pseudorapidity(), jet.phi());
+      fCJetArea->Fill(jet.area());
     }// End of hist fill
+
+    // Tabulate any information for raw jets if desired
+    if (i >= raw_jets.size()) continue;
+    fCJetPtHist[0]->Fill(raw_jets[i].pt());
   }// End of jet loop
   
   
-  return 1;
+  return 0;
 }// End of StJetInterface::ClusterPicoJets
 
 //----------------------------------------------------------------------------------------------------- Class Helper Methods

@@ -43,16 +43,13 @@ class TFile;
 class TChain;
 class TTree;
 class TH1D;
+class TH2D;
 class TString;
 
 // STAR classes
 class StPicoDst;
 class StMuDst;
 class StRefMultCorr;
-
-// FastJet classes
-class JetAlgorithm;
-//class fastjet::JetDefinition;
 
 // Static variables used elsewhere in the class 
 const double PION_MASS = 0.13957039;
@@ -88,8 +85,12 @@ private:
   StPicoDst*                        	fPicoDst;                          		// Pointer to PicoDST file to read
   
   // TObject pointers
-  TH1D*					fJetHistograms[10];                                    // Sample histogram
-  
+  TH1D*                                 fBgInfoHistograms[2];                          // Histograms for BG rho and sigma
+  // Charged jet histograms
+  TH1D*                                 fCJetNConstituentsHist;                         // Histograms for jet constituent count
+  TH1D*					fCJetPtHist[2];                                 // Histograms for jet pT, before/after subtraction
+  TH2D*                                 fCJetRapPhiHist;                                // Histogram for jet eta/phi position
+  TH1D*                                 fCJetArea;                                      // Histograms for jet area
 
   // *----------- END class variables with bitwise overwrite
   Char_t memory_zero_end[1];
@@ -100,9 +101,11 @@ private:
   // so that they are not overwritten by zeros in the memory
   
   // Jet settings that take numerical values
+  double   fMaxRapidity;
   double   fJetRadius;
   double   fJetMinPt;
-  
+  double   fGhostArea;
+
   // Class behavior flags
   Bool_t   fCollectJetHistograms;
   
@@ -123,6 +126,9 @@ public:
   void    SetJetAlgorithm(TString algo);
   void    SetJetRadius(double radius);
   void    SetRecombinationScheme(TString scheme);
+  void    SetJetAreaType(TString area);
+  void    SetMaxRapidity(double max_rap);
+  void    SetGhostArea(double ghost_area);
   
   // Performing clustering
   int     ClusterPicoJets(StPicoDst* picoDst);
@@ -137,7 +143,7 @@ public:
   void           PrintJetDefinition();
   // Setters
   void SetJetMinPt(double minpt)                { fJetMinPt = minpt; };
-  void SetCollectJetHistograms()                { fCollectJetHistograms = true; }
+  void SetCollectJetHistograms(bool fHist)      { fCollectJetHistograms = fHist; }
   void SetOutputFile(TFile* newfile)            { fOutputFile = newfile; }
 
   // Getters

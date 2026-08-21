@@ -15,7 +15,7 @@
 
 
 # Use "0" to get all files
-total_files="10"
+total_files="20"
 
 # Either "daq_reco_picoDst" or "daq_reco_muDst"
 # Input is not case sensitive.
@@ -23,14 +23,14 @@ file_type="daq_reco_PicoDst"
 
 # Trigger setup, typically "AA{Energy}_production_{year} or similar, 
 # see file list {https://www.star.bnl.gov/public/comp/prod/localdata/ProdDDstreams.html} to find the desired dataset
-trigger_setup_name="pp200_production_2012"
+trigger_setup_name="production_isobar_2018"
 
 # Software production key, since some datasets are produced multiple times
 # as changes are made and newer tools are added to the production process
-production_key="P12id"
+production_key="P22ia"
 
 # Name of the file to output
-outfile_name="pp2012.list"
+outfile_name="isobar2018.list"
 
 
 # Stat directories, remove previous file if it exists
